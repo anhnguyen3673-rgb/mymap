@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Interactive Campus Map</title>
+  <style>
+    :root {
+      --bg-dark: #0a0e17;
+      --panel-bg: rgba(16, 24, 40, 0.9);
+      --accent-cyan: #00f3ff;
+      --accent-blue: #0066ff;
+      --accent-red: #ff0033;
+      --text-main: #e0e6ed;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Header Alarm Style - Đếm ngược gấp gáp */
+    header {
+      background: linear-gradient(135deg, rgba(255,0,51,0.15), rgba(10,14,23,0.9));
+      border-bottom: 1px solid rgba(255, 0, 51, 0.4);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .timer-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .timer-icon {
+      width: 12px;
+      height: 12px;
+      background: var(--accent-red);
+      box-shadow: 0 0 12px var(--accent-red);
+      border-radius: 50%;
+      animation: urgent-blink 0.5s infinite alternate ease-in-out;
+    }
+
+    @keyframes urgent-blink {
+      0% { opacity: 0.2; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1.2); }
+    }
+
+    .timer-label {
+      font-size: 0.7rem;
+      color: var(--accent-red);
+      text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .timer-display {
+      font-family: 'Courier New', Courier, monospace, sans-serif;
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--accent-red);
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(255, 0, 51, 0.8), 0 0 20px rgba(255, 0, 51, 0.4);
+      animation: text-pulse 1s infinite alternate;
+    }
+
+    @keyframes text-pulse {
+      0% { opacity: 0.9; }
+      100% { opacity: 1; text-shadow: 0 0 14px rgba(255, 0, 51, 1); }
+    }
+
+    .status-badge {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: rgba(255, 0, 51, 0.2);
+      border: 1px solid var(--accent-red);
+      color: var(--accent-red);
+      letter-spacing: 1px;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 12px;
+      max-width: 600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .map-wrapper {
+      position: relative;
+      background: var(--panel-bg);
+      border: 1px solid rgba(255, 0, 51, 0.3);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    .map-header {
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .map-container {
+      position: relative;
+      width: 100%;
+      line-height: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #0d131d;
+    }
+
+    .map-img {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+    }
+
+    /* Hotspot Pulsing Red Dots */
+    .hotspot {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      z-index: 10;
+    }
+
+    .hotspot .core {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      background-color: var(--accent-red);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--accent-red), 0 0 20px var(--accent-red);
+      transition: transform 0.2s ease;
+    }
+
+    .hotspot .pulse {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 22px;
+      height: 22px;
+      border: 2px solid var(--accent-red);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse-ring 1.2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+      opacity: 0;
+    }
+
+    @keyframes pulse-ring {
+      0% { width: 8px; height: 8px; opacity: 1; }
+      100% { width: 36px; height: 36px; opacity: 0; }
+    }
+
+    .hotspot.active .core {
+      background-color: #fff;
+      box-shadow: 0 0 12px #fff, 0 0 24px var(--accent-cyan);
+      transform: translate(-50%, -50%) scale(1.4);
+    }
+
+    .hotspot.active .pulse {
+      border-color: var(--accent-cyan);
+    }
+
+    .pills-container {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 2px;
+      scrollbar-width: none;
+    }
+
+    .pills-container::-webkit-scrollbar { display: none; }
+
+    .pill-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 16px;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .pill-btn.active {
+      background: rgba(255, 0, 51, 0.2);
+      border-color: var(--accent-red);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .info-card {
+      background: var(--panel-bg);
+      border: 1px solid rgba(255, 0, 51, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .info-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .info-desc {
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+    }
+
+    footer {
+      padding: 12px 16px;
+      background: rgba(10, 14, 23, 0.95);
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header Đếm ngược Cảm giác vội vã -->
+  <header>
+    <div class="timer-container">
+      <div class="timer-icon"></div>
+      <div>
+        <div class="timer-label">THỜI GIAN CÒN LẠI</div>
+        <div class="timer-display" id="countdown">60:00</div>
+      </div>
+    </div>
+    <div class="status-badge">URGENT</div>
+  </header>
+
+  <main>
+    <div class="map-wrapper">
+      <div class="map-container">
+        <!-- Ảnh sơ đồ map2.png mới nhất -->
+        <img src="map.png?v=10" alt="Bản đồ Campus" class="map-img">
+
+        <!-- TỌA ĐỘ CHUẨN XÁC TỪNG PIXEL TRÊN ẢNH MAP2.PNG -->
+        <!-- 1. Tòa Thí nghiệm -->
+        <div class="hotspot active" style="top: 16.5%; left: 58.2%;" data-index="0"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 2. Tòa H2 -->
+        <div class="hotspot" style="top: 44.5%; left: 77.8%;" data-index="1"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 3. Đài phun nước -->
+        <div class="hotspot" style="top: 80.8%; left: 36.2%;" data-index="2"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 4. Tòa C4 (Khe nhỏ sau H2) -->
+        <div class="hotspot" style="top: 34.2%; left: 88.5%;" data-index="3"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 5. Trạm y tế -->
+        <div class="hotspot" style="top: 57.8%; left: 76.5%;" data-index="4"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 6. Tòa H1 -->
+        <div class="hotspot" style="top: 43.8%; left: 27.6%;" data-index="5"><div class="pulse"></div><div class="core"></div></div>
+
+        <!-- 7. Tòa H3 -->
+        <div class="hotspot" style="top: 15.2%; left: 35.2%;" data-index="6"><div class="pulse"></div><div class="core"></div></div>
+      </div>
+    </div>
+
+    <div class="pills-container" id="pillsContainer"></div>
+
+    <div class="info-card">
+      <div class="info-title">
+        <span id="locTitle">Tòa Thí nghiệm</span>
+      </div>
+      <p class="info-desc" id="locDesc">
+        Công trình Nhà Thí nghiệm cao 13 tầng hiện đại với diện tích sàn 13.200m², bao gồm 16 phòng thí nghiệm chuyên sâu.[cite: 1]
+      </p>
+    </div>
+  </main>
+
+  <footer>Interactive Campus Mobile Map &copy; 2026</footer>
+
+  <script>
+    // Đồng hồ đếm ngược 1 tiếng
+    let totalSeconds = 3600;
+    const countdownElement = document.getElementById('countdown');
+    setInterval(() => {
+      if (totalSeconds > 0) totalSeconds--;
+      const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+      const s = String(totalSeconds % 60).padStart(2, '0');
+      countdownElement.textContent = `${m}:${s}`;
+    }, 1000);
+
+    const locations = [
+      { title: "Tòa Thí nghiệm", desc: "Nơi tập trung các phòng Lab công nghệ, hệ thống 06 phòng thực hành máy tính (mỗi phòng trang bị từ 40 đến 50 bộ máy tính hiện đại) và phòng thí nghiệm công nghệ kết nối Internet phục vụ nghiên cứu." },
+      { title: "Tòa H2", desc: "Giảng đường H2 quy mô 4 tầng, trang bị hệ thống máy chiếu, mạng tốc độ cao phục vụ các giờ học lý thuyết, thảo luận chuyên đề và học tập nhóm." },
+      { title: "Đài phun nước", desc: "Khu vực cảnh quan trung tâm nằm trước Tòa A1. Đây là điểm nhấn không gian kết nối giao thông nội bộ giữa khối hành chính và khu giảng đường.." },
+      { title: "Tòa C4", desc: "Khu nhà C4 nằm ở đằng sau Giảng đường H2. Nơi bố trí văn phòng làm việc của các bộ môn chuyên môn và phòng thực hành bổ trợ." },
+      { title: "Trạm y tế", desc: "Trạm Y tế nhà trường nằm tại Tầng 1, 2, 3 của khối Nhà 4 tầng (phía sau Thư viện, gần H2). Phụ trách sơ cấp cứu, chăm sóc sức khỏe ban đầu và tư vấn y tế cho toàn thể cán bộ, sinh viên." },
+      { title: "Tòa H1", desc: "Giảng đường H1 quy mô 6 tầng đa năng. Khối giảng đường truyền thống phục vụ giảng dạy lý thuyết đại cương, chuyên ngành và các hoạt động phong trào, sinh hoạt câu lạc bộ." },
+      { title: "Tòa H3", desc: "Khối giảng đường H3 gồm 7 tầng nổi và 2 tầng hầm với các phòng học hiện đại, khang trang, đầy đủ tính năng hỗ trợ giảng dạy." }
+    ];
+
+    const hotspots = document.querySelectorAll('.hotspot');
+    const pillsContainer = document.getElementById('pillsContainer');
+
+    locations.forEach((loc, index) => {
+      const btn = document.createElement('button');
+      btn.className = `pill-btn ${index === 0 ? 'active' : ''}`;
+      btn.textContent = loc.title;
+      btn.addEventListener('click', () => {
+        hotspots.forEach((s, i) => s.classList.toggle('active', i === index));
+        pillsContainer.querySelectorAll('.pill-btn').forEach((p, i) => p.classList.toggle('active', i === index));
+        document.getElementById('locTitle').textContent = loc.title;
+        document.getElementById('locDesc').textContent = loc.desc;
+      });
+      pillsContainer.appendChild(btn);
+    });
+
+    hotspots.forEach((spot) => {
+      spot.addEventListener('click', () => {
+        const index = parseInt(spot.getAttribute('data-index'));
+        hotspots.forEach((s, i) => s.classList.toggle('active', i === index));
+        pillsContainer.querySelectorAll('.pill-btn').forEach((p, i) => p.classList.toggle('active', i === index));
+        document.getElementById('locTitle').textContent = locations[index].title;
+        document.getElementById('locDesc').textContent = locations[index].desc;
+      });
+    });
+  </script>
+</body>
+</html>
